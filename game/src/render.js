@@ -870,6 +870,17 @@ export class Renderer {
       ctx.arc(-2, 0, 4.5, Math.PI * 0.5, Math.PI * 1.5);
       ctx.fill();
 
+      if (p.state === 'flee') {
+        ctx.fillStyle = '#e63946';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('!', 0, -12);
+      }
+
+      ctx.restore();
+    }
+  }
+
   renderGunShopBeacon(ctx) {
     const shop = { x: 2300, y: 940, w: 140, h: 100 };
     const bx = shop.x + shop.w / 2;
@@ -899,6 +910,35 @@ export class Renderer {
       ctx.lineTo(b.x, b.y);
       ctx.stroke();
       ctx.restore();
+    }
+  }
+
+  renderRivals(ctx, rivals) {
+    for (const r of rivals) {
+      if (r.isDead) continue;
+      ctx.save();
+      ctx.translate(r.x, r.y);
+      ctx.rotate(r.angle);
+
+      // Torso & tactical vest
+      ctx.fillStyle = '#2b2d42';
+      ctx.fillRect(-8, -6, 16, 12);
+      ctx.fillStyle = '#d90429'; // Red Syndicate Bandana
+      ctx.beginPath();
+      ctx.arc(-2, 0, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Gun
+      ctx.fillStyle = '#111';
+      ctx.fillRect(4, 3, 10, 3);
+
+      // Health bar above rival
+      ctx.restore();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.fillRect(r.x - 14, r.y - 20, 28, 4);
+      ctx.fillStyle = '#e63946';
+      const hpWidth = (r.health / r.maxHealth) * 28;
+      ctx.fillRect(r.x - 14, r.y - 20, Math.max(0, hpWidth), 4);
     }
   }
 
