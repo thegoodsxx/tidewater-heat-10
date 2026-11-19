@@ -111,11 +111,24 @@ export class Renderer {
     // 12. Gun Shop Ammu-Nation Refill Beacon
     this.renderGunShopBeacon(ctx);
 
+    // 13. Mission World Beacon Marker
+    if (options.missions) {
+      const marker = options.missions.getCurrentMarker();
+      if (marker) {
+        this.renderMissionMarker(ctx, marker.x, marker.y, marker.label);
+      }
+    }
+
     ctx.restore();
 
     // 11. Screen Overlays (Busted / Wasted)
     if (options.wantedSystem) {
       this.renderScreenOverlays(ctx, options.wantedSystem, width, height);
+    }
+
+    // 12. Mission Dialogue & Story Panels
+    if (options.missions) {
+      this.renderMissionPanels(ctx, options.missions, width, height);
     }
   }
 
@@ -751,32 +764,137 @@ export class Renderer {
     }
   }
 
-  renderRivals(ctx, rivals) {
-    for (const r of rivals) {
-      if (r.isDead) continue;
+  renderMissionMarker(ctx, x, y, label) {
+    const pulse = Math.sin(this.time * 6) * 5;
+    ctx.save();
+    // Glowing golden ground rings
+    ctx.strokeStyle = '#ffb703';
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.arc(x, y, 26 + pulse, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(255, 183, 3, 0.25)';
+    ctx.beginPath();
+    ctx.arc(x, y, 26 + pulse, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Floating 3D Diamond
+    const bob = Math.sin(this.time * 4) * 6;
+    ctx.fillStyle = '#ffb703';
+    ctx.beginPath();
+    ctx.moveTo(x, y - 35 + bob);
+    ctx.lineTo(x + 12, y - 47 + bob);
+    ctx.lineTo(x, y - 59 + bob);
+    ctx.lineTo(x - 12, y - 47 + bob);
+    ctx.closePath();
+    ctx.fill();
+
+    // Label
+    if (label) {
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(label, x, y - 68 + bob);
+    }
+    ctx.restore();
+  }
+
+  renderMissionPanels(ctx, missions, width, height) {
+    const dialogue = missions.getCurrentDialogueLine();
+    if (dialogue) {
+      // Bottom dialogue bar
+      const panelH = 120;
+      const py = height - panelH - 20;
+      const px = Math.max(20, (width - 760) / 2);
+      const pw = Math.min(width - 40, 760);
+
+      ctx.fillStyle = 'rgba(15, 18, 25, 0.94)';
+      ctx.fillRect(px, py, pw, panelH);
+      ctx.strokeStyle = PALETTE.hudBorder;
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(px, py, pw, panelH);
+
+      // Portrait box
+      const isMarisol = dialogue.speaker.includes('Marisol');
+      ctx.fillStyle = '#222831';
+      ctx.fillRect(px + 15, py + 15, 90, 90);
+      ctx.strokeStyle = isMarisol ? '#ff9838' : '#2ec4b6';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(px + 15, py + 15, 90, 90);
+
+      // Draw stylized portrait inside box
       ctx.save();
-      ctx.translate(r.x, r.y);
-      ctx.rotate(r.angle);
-
-      // Torso & tactical vest
-      ctx.fillStyle = '#2b2d42';
-      ctx.fillRect(-8, -6, 16, 12);
-      ctx.fillStyle = '#d90429'; // Red Syndicate Bandana
-      ctx.beginPath();
-      ctx.arc(-2, 0, 5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Gun
-      ctx.fillStyle = '#111';
-      ctx.fillRect(4, 3, 10, 3);
-
-      // Health bar above rival
+      ctx.translate(px + 60, py + 60);
+      if (isMarisol) {
+        // Marisol Vega portrait
+        ctx.fillStyle = '#e0ac69'; // skin
+        ctx.beginPath();
+        ctx.arc(0, 2, 22, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#111'; // sleek dark hair
+        ctx.beginPath();
+        ctx.arc(0, -6, 24, Math.PI * 0.8, Math.PI * 2.2);
+        ctx.fill();
+        ctx.fillStyle = '#111'; // sunglasses
+        ctx.fillRect(-14, -2, 12, 8);
+        ctx.fillRect(2, -2, 12, 8);
+        ctx.fillStyle = '#ffd166'; // gold hoop earring
+        ctx.beginPath();
+        ctx.arc(-20, 4, 4, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        // Player portrait
+        ctx.fillStyle = '#e5a176';
+        ctx.beginPath();
+        ctx.arc(0, 2, 22, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#2d2218';
+        ctx.beginPath();
+        ctx.arc(0, -6, 23, Math.PI * 0.9, Math.PI * 2.1);
+        ctx.fill();
+        ctx.fillStyle = '#111';
+        ctx.fillRect(-12, -2, 24, 7);
+      }
       ctx.restore();
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-      ctx.fillRect(r.x - 14, r.y - 20, 28, 4);
+
+      // Speaker Name
+      ctx.fillStyle = isMarisol ? '#ff9838' : '#2ec4b6';
+      ctx.font = 'bold 18px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(dialogue.speaker, px + 125, py + 36);
+
+      // Dialogue Text
+      ctx.fillStyle = '#f0f4f8';
+      ctx.font = '16px sans-serif';
+      ctx.fillText(dialogue.text, px + 125, py + 68);
+
+      // Continue prompt
+      ctx.fillStyle = '#ffd166';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText('[E / Enter] Continue ▶', px + pw - 20, py + panelH - 15);
+    } else if (missions.missionState === 'failed') {
+      // Failure notice
+      const panelH = 100;
+      const py = height / 2 - 50;
+      const px = Math.max(20, (width - 640) / 2);
+      const pw = Math.min(width - 40, 640);
+
+      ctx.fillStyle = 'rgba(20, 10, 15, 0.95)';
+      ctx.fillRect(px, py, pw, panelH);
+      ctx.strokeStyle = '#e63946';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(px, py, pw, panelH);
+
       ctx.fillStyle = '#e63946';
-      const hpWidth = (r.health / r.maxHealth) * 28;
-      ctx.fillRect(r.x - 14, r.y - 20, Math.max(0, hpWidth), 4);
+      ctx.font = 'bold 24px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('MISSION FAILED', width / 2, py + 38);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '15px sans-serif';
+      ctx.fillText(missions.statusText, width / 2, py + 72);
     }
   }
 }
