@@ -72,7 +72,12 @@ export class Renderer {
       this.renderPedestrians(ctx, options.pedestrians.peds);
     }
 
-    // 8. Vehicles (lower chassis & headlights)
+    // 8. Combat Rivals & Gang members
+    if (options.combat && options.combat.rivals) {
+      this.renderRivals(ctx, options.combat.rivals);
+    }
+
+    // 9. Vehicles (lower chassis & headlights)
     const allVehicles = traffic && traffic.vehicles ? [...traffic.vehicles] : [];
     if (options.wantedSystem) {
       allVehicles.push(...options.wantedSystem.getAllPoliceVehicles());
@@ -97,6 +102,14 @@ export class Renderer {
     if (particles) {
       particles.renderParticles(ctx);
     }
+
+    // 11. Combat Bullets & Tracers
+    if (options.combat && options.combat.bullets) {
+      this.renderBullets(ctx, options.combat.bullets);
+    }
+
+    // 12. Gun Shop Ammu-Nation Refill Beacon
+    this.renderGunShopBeacon(ctx);
 
     ctx.restore();
 
@@ -706,14 +719,64 @@ export class Renderer {
       ctx.arc(-2, 0, 4.5, Math.PI * 0.5, Math.PI * 1.5);
       ctx.fill();
 
-      if (p.state === 'flee') {
-        ctx.fillStyle = '#e63946';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('!', 0, -12);
-      }
+  renderGunShopBeacon(ctx) {
+    const shop = { x: 2300, y: 940, w: 140, h: 100 };
+    const bx = shop.x + shop.w / 2;
+    const by = shop.y + shop.h + 20;
 
+    ctx.save();
+    ctx.strokeStyle = '#2a9d8f';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(bx, by, 18 + Math.sin(this.time * 5) * 3, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.fillStyle = '#2a9d8f';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('AMMO $80', bx, by + 4);
+    ctx.restore();
+  }
+
+  renderBullets(ctx, bullets) {
+    for (const b of bullets) {
+      ctx.save();
+      ctx.strokeStyle = b.isEnemy ? '#ff3b30' : '#ffe66d';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(b.x - Math.cos(b.angle) * 14, b.y - Math.sin(b.angle) * 14);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
       ctx.restore();
+    }
+  }
+
+  renderRivals(ctx, rivals) {
+    for (const r of rivals) {
+      if (r.isDead) continue;
+      ctx.save();
+      ctx.translate(r.x, r.y);
+      ctx.rotate(r.angle);
+
+      // Torso & tactical vest
+      ctx.fillStyle = '#2b2d42';
+      ctx.fillRect(-8, -6, 16, 12);
+      ctx.fillStyle = '#d90429'; // Red Syndicate Bandana
+      ctx.beginPath();
+      ctx.arc(-2, 0, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Gun
+      ctx.fillStyle = '#111';
+      ctx.fillRect(4, 3, 10, 3);
+
+      // Health bar above rival
+      ctx.restore();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.fillRect(r.x - 14, r.y - 20, 28, 4);
+      ctx.fillStyle = '#e63946';
+      const hpWidth = (r.health / r.maxHealth) * 28;
+      ctx.fillRect(r.x - 14, r.y - 20, Math.max(0, hpWidth), 4);
     }
   }
 }
