@@ -1,141 +1,445 @@
-// Drawing only: the world's state and the current screen in, pixels out. The 1280x720 playfield
-// is scaled to fit the window and centred, the margin filled with the backdrop colour. Flat
-// rectangles and circles, canvas text for the HUD and the panels. Text that holds a number is
-// rebuilt only when the number changes, so a frame allocates nothing.
-import { FIELD, FONT, LIVES, PALETTE } from './config.js';
-import { KIND_COIN } from './world.js';
+/**
+ * Tidewater Heat - Canvas 2D Renderer
+ * Golden-hour coastal aesthetic, soft cast shadows, detailed city geometry, and player rendering.
+ */
 
-export const SCREEN_TITLE = 'title';
-export const SCREEN_PLAY = 'play';
-export const SCREEN_PAUSED = 'paused';
-export const SCREEN_OVER = 'over';
+import { PALETTE, WORLD } from './config.js';
 
-/** The panel's width; its height grows with its lines: room for the title, the lines and the prompt. */
-const PANEL = { width: 600, top: 134, line: 34, bottom: 70 };
-const LIFE_SIZE = 20;
-const LIFE_GAP = 8;
+export class Renderer {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.time = 0;
+  }
 
-function cachedLabel(prefix) {
-  let value = -1;
-  let text = '';
-  return function label(next) {
-    if (next !== value) {
-      value = next;
-      text = prefix + next;
+  resize(w, h) {
+    this.canvas.width = w;
+    this.canvas.height = h;
+  }
+
+  clear() {
+    this.ctx.fillStyle = '#1e2126';
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+  }
+
+  drawCircle(x, y, r, fillStyle) {
+    this.ctx.fillStyle = fillStyle;
+    this.ctx.beginPath();
+    this.ctx.arc(x, y, r, 0, Math.PI * 2);
+    this.ctx.fill();
+  }
+
+  renderScene(dt, city, player, camera, options = {}) {
+    this.time += dt;
+    const ctx = this.ctx;
+    const { width, height } = this.canvas;
+    const cam = camera.getOffset();
+
+    ctx.save();
+    // Camera transformation
+    ctx.translate(width / 2, height / 2);
+    ctx.scale(cam.zoom, cam.zoom);
+    ctx.translate(-cam.x, -cam.y);
+
+    const bounds = camera.getVisibleBounds();
+
+    // 1. Terrain Ground
+    this.renderGround(ctx, city, bounds);
+
+    // 2. Beach, Coast & Ocean Waves
+    this.renderCoastAndWater(ctx, city, bounds);
+
+    // 3. Roads, Sidewalks, Crosswalks & Pier
+    this.renderRoads(ctx, city, bounds);
+
+    // 4. Ground Shadow Pass (Golden-hour low-sun angle)
+    this.renderShadows(ctx, city, player, bounds);
+
+    // 5. Props (Park pond, trees, streetlamps)
+    this.renderProps(ctx, city, bounds);
+
+    // 6. Buildings & Rooftops
+    this.renderBuildings(ctx, city, bounds);
+
+    // 7. Player (if on foot)
+    if (!player.inVehicle && !player.isDead) {
+      this.renderPlayer(ctx, player);
     }
-    return text;
-  };
-}
 
-export function createRenderer(canvas) {
-  const context = canvas.getContext('2d');
-  const view = { scale: 1, x: 0, y: 0 };
-  const scoreLabel = cachedLabel('Score ');
-  const levelLabel = cachedLabel('Level ');
-  const finalLabel = cachedLabel('Score ');
-  const bestLabel = cachedLabel('Best ');
-
-  function resize() {
-    const ratio = window.devicePixelRatio || 1;
-    const width = Math.round(window.innerWidth * ratio);
-    const height = Math.round(window.innerHeight * ratio);
-    canvas.width = width;
-    canvas.height = height;
-    view.scale = Math.min(width / FIELD.width, height / FIELD.height);
-    view.x = (width - FIELD.width * view.scale) / 2;
-    view.y = (height - FIELD.height * view.scale) / 2;
+    ctx.restore();
   }
 
-  const fonts = new Map();
-  function text(value, x, y, size, color, align) {
-    if (!fonts.has(size)) fonts.set(size, `${size}px ${FONT}`);
-    context.font = fonts.get(size);
-    context.fillStyle = color;
-    context.textAlign = align;
-    context.fillText(value, x, y);
+  renderGround(ctx, city, bounds) {
+    // Default coastal soil/grass backdrop
+    ctx.fillStyle = '#5c804b';
+    ctx.fillRect(0, 0, WORLD.width, WORLD.height);
+
+    // Palm Grove Park
+    if (city.park) {
+      ctx.fillStyle = PALETTE.grass;
+      ctx.fillRect(city.park.x, city.park.y, city.park.w, city.park.h);
+
+      // Park walking paths
+      ctx.fillStyle = PALETTE.parkPath;
+      for (const path of city.park.paths) {
+        ctx.fillRect(path.x, path.y, path.w, path.h);
+      }
+
+      // Park pond
+      const pond = city.park.pond;
+      ctx.fillStyle = PALETTE.waterDeep;
+      ctx.beginPath();
+      ctx.ellipse(pond.x + pond.w / 2, pond.y + pond.h / 2, pond.w / 2, pond.h / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pond wooden bridge
+      ctx.fillStyle = PALETTE.boardwalk;
+      ctx.fillRect(pond.x + pond.w / 2 - 16, pond.y, 32, pond.h);
+    }
   }
 
-  function drawField(state) {
-    context.fillStyle = PALETTE.sky;
-    context.fillRect(0, 0, FIELD.width, FIELD.height);
-    context.fillStyle = PALETTE.ground;
-    context.fillRect(0, FIELD.groundY, FIELD.width, FIELD.height - FIELD.groundY);
+  renderCoastAndWater(ctx, city, bounds) {
+    const beach = city.beach;
+    if (!beach) return;
 
-    const items = state.items;
-    for (let index = 0; index < items.length; index += 1) {
-      const item = items[index];
-      if (!item.active) continue;
-      if (item.kind === KIND_COIN) {
-        context.fillStyle = PALETTE.coin;
-        context.beginPath();
-        context.arc(item.x + item.width / 2, item.y + item.height / 2, item.width / 2, 0, Math.PI * 2);
-        context.fill();
-      } else {
-        context.fillStyle = PALETTE.block;
-        context.fillRect(item.x, item.y, item.width, item.height);
+    // Golden Sand Beach
+    const sandGrad = ctx.createLinearGradient(0, beach.y, 0, beach.y + beach.h);
+    sandGrad.addColorStop(0, PALETTE.sand);
+    sandGrad.addColorStop(0.85, PALETTE.sandWet);
+    sandGrad.addColorStop(1, '#b8985c');
+    ctx.fillStyle = sandGrad;
+    ctx.fillRect(0, beach.y, WORLD.width, beach.h);
+
+    // Ocean Water
+    const waterY = WORLD.waterY;
+    const waterH = WORLD.height - waterY;
+    const oceanGrad = ctx.createLinearGradient(0, waterY, 0, WORLD.height);
+    oceanGrad.addColorStop(0, PALETTE.waterShallow);
+    oceanGrad.addColorStop(0.2, PALETTE.waterDeep);
+    oceanGrad.addColorStop(1, '#0e3a50');
+    ctx.fillStyle = oceanGrad;
+    ctx.fillRect(0, waterY, WORLD.width, waterH);
+
+    // Animated Ocean Wave Shimmer
+    const waveOffset = Math.sin(this.time * 1.8) * 12;
+    ctx.fillStyle = PALETTE.waterFoam;
+    ctx.beginPath();
+    for (let x = 0; x <= WORLD.width; x += 60) {
+      const wy = waterY + 6 + Math.sin(this.time * 2.2 + x * 0.02) * 5 + waveOffset * 0.4;
+      if (x === 0) ctx.moveTo(x, wy);
+      else ctx.lineTo(x, wy);
+    }
+    ctx.lineTo(WORLD.width, waterY + 16);
+    ctx.lineTo(0, waterY + 16);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  renderRoads(ctx, city, bounds) {
+    // 1. Sidewalks
+    ctx.fillStyle = PALETTE.sidewalk;
+    for (const sw of city.sidewalks) {
+      ctx.fillRect(sw.x, sw.y, sw.w, sw.h);
+      ctx.fillStyle = PALETTE.sidewalkEdge;
+      ctx.fillRect(sw.x, sw.y, sw.w, 2);
+      ctx.fillRect(sw.x, sw.y + sw.h - 2, sw.w, 2);
+      ctx.fillStyle = PALETTE.sidewalk;
+    }
+
+    // 2. Asphalt Road Surfaces
+    ctx.fillStyle = PALETTE.asphalt;
+    for (const r of city.roads) {
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+    }
+
+    // 3. Marina Pier Boardwalk
+    if (city.pier) {
+      const pier = city.pier;
+      ctx.fillStyle = PALETTE.boardwalk;
+      ctx.fillRect(pier.x, pier.y, pier.w, pier.h);
+
+      // Wooden planks lines
+      ctx.strokeStyle = PALETTE.boardwalkPlank;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let py = pier.y; py <= pier.y + pier.h; py += 16) {
+        ctx.moveTo(pier.x, py);
+        ctx.lineTo(pier.x + pier.w, py);
+      }
+      ctx.stroke();
+
+      // Parking lot on pier
+      if (pier.parkingLot) {
+        const lot = pier.parkingLot;
+        ctx.fillStyle = PALETTE.asphaltDark;
+        ctx.fillRect(lot.x, lot.y, lot.w, lot.h);
+        ctx.strokeStyle = PALETTE.roadLineWhite;
+        ctx.lineWidth = 2;
+        // Parking bay lines
+        for (let lx = lot.x + 20; lx < lot.x + lot.w - 10; lx += 45) {
+          ctx.beginPath();
+          ctx.moveTo(lx, lot.y + 10);
+          ctx.lineTo(lx, lot.y + 60);
+          ctx.stroke();
+        }
       }
     }
 
-    const player = state.player;
-    // Blink while invulnerable after a hit: hidden on every other tenth of a second.
-    if (player.invulnerable === 0 || Math.floor(player.invulnerable * 10) % 2 === 1) {
-      context.fillStyle = PALETTE.player;
-      context.fillRect(player.x, player.y, player.width, player.height);
+    // 4. Road Lane Markings & Crosswalks
+    for (const r of city.roads) {
+      if (r.isVertical) {
+        const midX = r.x + r.w / 2;
+        // Solid yellow centerline
+        ctx.strokeStyle = PALETTE.roadLineYellow;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(midX, r.y);
+        ctx.lineTo(midX, r.y + r.h);
+        ctx.stroke();
+
+        // White dashed lane dividers
+        ctx.strokeStyle = PALETTE.roadLineWhite;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([18, 18]);
+        ctx.beginPath();
+        ctx.moveTo(r.x + r.w * 0.25, r.y);
+        ctx.lineTo(r.x + r.w * 0.25, r.y + r.h);
+        ctx.moveTo(r.x + r.w * 0.75, r.y);
+        ctx.lineTo(r.x + r.w * 0.75, r.y + r.h);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else {
+        const midY = r.y + r.h / 2;
+        // Solid yellow centerline
+        ctx.strokeStyle = PALETTE.roadLineYellow;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(r.x, midY);
+        ctx.lineTo(r.x + r.w, midY);
+        ctx.stroke();
+
+        // White dashed lane dividers
+        ctx.strokeStyle = PALETTE.roadLineWhite;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([18, 18]);
+        ctx.beginPath();
+        ctx.moveTo(r.x, r.y + r.h * 0.25);
+        ctx.lineTo(r.x + r.w, r.y + r.h * 0.25);
+        ctx.moveTo(r.x, r.y + r.h * 0.75);
+        ctx.lineTo(r.x + r.w, r.y + r.h * 0.75);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    // 5. Crosswalks at Intersections
+    ctx.fillStyle = PALETTE.crosswalk;
+    for (const inter of city.intersections) {
+      const x = inter.x;
+      const y = inter.y;
+      const hw = inter.w / 2;
+      const hh = inter.h / 2;
+
+      // North crosswalk
+      for (let i = -hw + 10; i < hw - 10; i += 16) {
+        ctx.fillRect(x + i, y - hh - 20, 10, 20);
+      }
+      // South crosswalk
+      for (let i = -hw + 10; i < hw - 10; i += 16) {
+        ctx.fillRect(x + i, y + hh, 10, 20);
+      }
     }
   }
 
-  function drawHud(state) {
-    context.textBaseline = 'top';
-    text(scoreLabel(state.score), 24, 20, 28, PALETTE.text, 'left');
-    text(levelLabel(state.level), FIELD.width / 2, 20, 28, PALETTE.text, 'center');
-    const firstLife = FIELD.width - 24 - LIVES * (LIFE_SIZE + LIFE_GAP) + LIFE_GAP;
-    text('Lives', firstLife - 12, 20, 28, PALETTE.text, 'right');
-    for (let life = 0; life < LIVES; life += 1) {
-      context.fillStyle = life < state.lives ? PALETTE.player : PALETTE.ground;
-      context.fillRect(firstLife + life * (LIFE_SIZE + LIFE_GAP), 24, LIFE_SIZE, LIFE_SIZE);
+  renderShadows(ctx, city, player, bounds) {
+    const shadowDist = PALETTE.shadowDist;
+    const shadowAngle = PALETTE.shadowAngle;
+    const sx = Math.cos(shadowAngle) * shadowDist;
+    const sy = Math.sin(shadowAngle) * shadowDist;
+
+    ctx.fillStyle = PALETTE.shadow;
+
+    // Building shadows
+    for (const b of city.buildings) {
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y);
+      ctx.lineTo(b.x + b.w, b.y);
+      ctx.lineTo(b.x + b.w + sx, b.y + sy);
+      ctx.lineTo(b.x + b.w + sx, b.y + b.h + sy);
+      ctx.lineTo(b.x + sx, b.y + b.h + sy);
+      ctx.lineTo(b.x, b.y + b.h);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Palm tree shadows
+    for (const p of city.props) {
+      if (p.type === 'palm_tree') {
+        ctx.beginPath();
+        ctx.ellipse(p.x + sx * 0.8, p.y + sy * 0.8, 22, 14, shadowAngle, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Player shadow
+    if (!player.inVehicle && !player.isDead) {
+      ctx.beginPath();
+      ctx.ellipse(player.x + sx * 0.4, player.y + sy * 0.4, player.radius + 3, player.radius - 2, shadowAngle, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 
-  function drawPanel(title, lines, prompt) {
-    const height = PANEL.top + lines.length * PANEL.line + PANEL.bottom;
-    const x = (FIELD.width - PANEL.width) / 2;
-    const y = (FIELD.height - height) / 2;
-    context.fillStyle = PALETTE.panel;
-    context.fillRect(x, y, PANEL.width, height);
-    context.textBaseline = 'alphabetic';
-    text(title, FIELD.width / 2, y + 78, 48, PALETTE.text, 'center');
-    for (let index = 0; index < lines.length; index += 1) {
-      text(lines[index], FIELD.width / 2, y + PANEL.top + index * PANEL.line, 22, PALETTE.muted, 'center');
-    }
-    text(prompt, FIELD.width / 2, y + height - 40, 24, PALETTE.coin, 'center');
-  }
+  renderProps(ctx, city, bounds) {
+    for (const p of city.props) {
+      if (p.type === 'palm_tree') {
+        // Trunk
+        ctx.fillStyle = PALETTE.treeTrunk;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
 
-  const TITLE_LINES = ['Dodge the red blocks. Catch the gold coins.', 'Move with ← → or A D.  Pause with P.', ''];
-  const PAUSED_LINES = ['The blocks will wait for you.'];
-  const OVER_LINES = ['', ''];
-
-  /** Paint one frame: the field, then the HUD or a panel for the screen the game is on. */
-  function draw(state, screen, best) {
-    context.setTransform(1, 0, 0, 1, 0, 0);
-    context.fillStyle = PALETTE.backdrop;
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.setTransform(view.scale, 0, 0, view.scale, view.x, view.y);
-    drawField(state);
-    if (screen === SCREEN_TITLE) {
-      TITLE_LINES[2] = bestLabel(best);
-      drawPanel('Block Dodger', TITLE_LINES, 'Press Space or click to start');
-      return;
-    }
-    drawHud(state);
-    if (screen === SCREEN_PAUSED) drawPanel('Paused', PAUSED_LINES, 'Press P to resume');
-    else if (screen === SCREEN_OVER) {
-      OVER_LINES[0] = finalLabel(state.score);
-      OVER_LINES[1] = bestLabel(best);
-      drawPanel('Game over', OVER_LINES, 'Press Space or click to play again');
+        // Tropical Palm Fronds
+        ctx.fillStyle = PALETTE.treeLeaves;
+        for (let i = 0; i < 7; i++) {
+          const a = (i / 7) * Math.PI * 2 + Math.sin(this.time * 1.5 + p.x) * 0.08;
+          ctx.beginPath();
+          ctx.ellipse(p.x + Math.cos(a) * 16, p.y + Math.sin(a) * 16, 18, 7, a, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = PALETTE.treeLeavesLight;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (p.type === 'street_lamp') {
+        ctx.fillStyle = '#495057';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+        // Warm dusk glow
+        ctx.fillStyle = 'rgba(255, 230, 160, 0.4)';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 14, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
 
-  resize();
-  window.addEventListener('resize', resize);
-  return { draw };
+  renderBuildings(ctx, city, bounds) {
+    for (const b of city.buildings) {
+      // 3D wall edge (front facade)
+      ctx.fillStyle = '#1c1f24';
+      ctx.fillRect(b.x, b.y + b.h - 8, b.w, 8);
+
+      // Building Rooftop Base
+      ctx.fillStyle = b.roofColor || '#3a3f47';
+      ctx.fillRect(b.x, b.y, b.w, b.h - 8);
+
+      // Roof Border / Parapet
+      ctx.strokeStyle = b.color || '#5a626d';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(b.x + 2, b.y + 2, b.w - 4, b.h - 12);
+
+      // HVAC / Rooftop units
+      ctx.fillStyle = '#26292e';
+      ctx.fillRect(b.x + 18, b.y + 18, 28, 22);
+      ctx.fillRect(b.x + b.w - 48, b.y + 18, 24, 20);
+
+      // Helipad on Hospital
+      if (b.details && b.details.hasHelipad) {
+        const cx = b.x + b.w / 2;
+        const cy = b.y + (b.h - 8) / 2;
+        ctx.strokeStyle = '#e63946';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 32, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = '#e63946';
+        ctx.font = 'bold 28px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('H', cx, cy);
+      }
+
+      // Neon / Signage
+      if (b.details && b.details.neonText) {
+        ctx.fillStyle = '#ffd166';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(b.details.neonText, b.x + b.w / 2, b.y + b.h - 14);
+      } else {
+        // Name label
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(b.name, b.x + b.w / 2, b.y + b.h / 2);
+      }
+    }
+  }
+
+  renderPlayer(ctx, player) {
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    ctx.rotate(player.angle);
+
+    // Damage flash
+    if (player.damageFlashTimer > 0 && Math.floor(player.damageFlashTimer * 20) % 2 === 0) {
+      ctx.globalAlpha = 0.5;
+    }
+
+    // Legs walking animation
+    const legOffset = Math.sin(player.walkCycle) * 7;
+    ctx.fillStyle = '#243242'; // Dark trousers
+    // Left leg
+    ctx.fillRect(-6 + legOffset, -12, 6, 10);
+    // Right leg
+    ctx.fillRect(-6 - legOffset, 2, 6, 10);
+
+    // Torso (Miami Coral Hawaiian Shirt)
+    ctx.fillStyle = '#f26a5b';
+    ctx.beginPath();
+    ctx.roundRect(-10, -9, 20, 18, 4);
+    ctx.fill();
+
+    // Shirt collar & floral accents
+    ctx.fillStyle = '#ffeaa7';
+    ctx.beginPath();
+    ctx.arc(0, 0, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Arms
+    ctx.fillStyle = '#e5a176'; // Skin
+    // Left arm
+    ctx.fillRect(-2, -12, 10, 5);
+    // Right arm (holding pistol forward)
+    ctx.fillRect(-2, 7, 14, 5);
+
+    // 9mm Pistol
+    ctx.fillStyle = '#1e252d';
+    ctx.fillRect(10, 6, 10, 4);
+
+    // Head
+    ctx.fillStyle = '#e5a176';
+    ctx.beginPath();
+    ctx.arc(0, 0, 7, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Hair / Sunglasses
+    ctx.fillStyle = '#2d2218';
+    ctx.beginPath();
+    ctx.arc(-2, 0, 6, Math.PI * 0.5, Math.PI * 1.5);
+    ctx.fill();
+    ctx.fillStyle = '#111';
+    ctx.fillRect(2, -4, 4, 8); // Sunglasses
+
+    // Muzzle flash
+    if (player.muzzleFlashTimer > 0) {
+      ctx.fillStyle = '#ffe66d';
+      ctx.beginPath();
+      ctx.arc(24, 8, 8 + Math.random() * 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
 }
