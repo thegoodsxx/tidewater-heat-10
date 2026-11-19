@@ -73,9 +73,13 @@ export class Renderer {
     }
 
     // 8. Vehicles (lower chassis & headlights)
-    if (traffic && traffic.vehicles) {
-      this.renderHeadlights(ctx, traffic.vehicles);
-      this.renderVehicles(ctx, traffic.vehicles);
+    const allVehicles = traffic && traffic.vehicles ? [...traffic.vehicles] : [];
+    if (options.wantedSystem) {
+      allVehicles.push(...options.wantedSystem.getAllPoliceVehicles());
+    }
+    if (allVehicles.length > 0) {
+      this.renderHeadlights(ctx, allVehicles);
+      this.renderVehicles(ctx, allVehicles);
     }
 
     // 7. Props (Park pond, trees, streetlamps)
@@ -95,6 +99,39 @@ export class Renderer {
     }
 
     ctx.restore();
+
+    // 11. Screen Overlays (Busted / Wasted)
+    if (options.wantedSystem) {
+      this.renderScreenOverlays(ctx, options.wantedSystem, width, height);
+    }
+  }
+
+  renderScreenOverlays(ctx, wantedSystem, width, height) {
+    if (wantedSystem.isWastedActive()) {
+      ctx.fillStyle = 'rgba(180, 20, 30, 0.65)';
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 64px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('WASTED', width / 2, height / 2 - 20);
+
+      ctx.font = '22px sans-serif';
+      ctx.fillStyle = '#ffeaa7';
+      ctx.fillText('Admitted to Tidewater Memorial Hospital (-$200)', width / 2, height / 2 + 35);
+    } else if (wantedSystem.isBustedActive()) {
+      ctx.fillStyle = 'rgba(15, 30, 60, 0.75)';
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = '#2b7fff';
+      ctx.font = 'bold 64px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('BUSTED', width / 2, height / 2 - 20);
+
+      ctx.font = '22px sans-serif';
+      ctx.fillStyle = '#f1f5f9';
+      ctx.fillText('Processed at Tidewater Precinct #1 (-$300 Bail)', width / 2, height / 2 + 35);
+    }
   }
 
   renderGround(ctx, city, bounds) {
