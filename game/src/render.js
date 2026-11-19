@@ -137,6 +137,125 @@ export class Renderer {
     }
   }
 
+  renderStartScreen(ctx, width, height, saveSummary) {
+    // Warm golden-hour sunset gradient
+    const bg = ctx.createLinearGradient(0, 0, 0, height);
+    bg.addColorStop(0, '#2d1b2e');
+    bg.addColorStop(0.35, '#6a2c4e');
+    bg.addColorStop(0.65, '#b84a39');
+    bg.addColorStop(0.85, '#e07a38');
+    bg.addColorStop(1, '#f6c368');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, width, height);
+
+    // Subtle sun disc
+    ctx.fillStyle = 'rgba(255, 235, 170, 0.4)';
+    ctx.beginPath();
+    ctx.arc(width / 2, height * 0.45, 120, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Ocean water base
+    ctx.fillStyle = '#102a38';
+    ctx.fillRect(0, height - 90, width, 90);
+    ctx.fillStyle = 'rgba(210, 242, 247, 0.3)';
+    ctx.fillRect(0, height - 90, width, 4);
+
+    // Main Title: TIDEWATER HEAT
+    ctx.save();
+    ctx.textAlign = 'center';
+
+    // Title 3D Drop Shadow
+    ctx.font = '900 68px "Trebuchet MS", sans-serif';
+    ctx.fillStyle = '#1a0b16';
+    ctx.fillText('TIDEWATER HEAT', width / 2 + 5, height * 0.22 + 5);
+
+    // Title Main Glow & Text
+    ctx.fillStyle = '#ffb703';
+    ctx.fillText('TIDEWATER HEAT', width / 2, height * 0.22);
+
+    // Subtitle
+    ctx.font = 'bold 18px sans-serif';
+    ctx.fillStyle = '#f8edeb';
+    ctx.fillText('A COASTAL CRIME ODYSSEY · TIDEWATER CITY', width / 2, height * 0.28);
+
+    // Story Intro Card
+    const cardW = Math.min(width - 60, 680);
+    const cardH = 95;
+    const cardX = (width - cardW) / 2;
+    const cardY = height * 0.33;
+
+    ctx.fillStyle = 'rgba(15, 18, 25, 0.85)';
+    ctx.beginPath();
+    ctx.roundRect(cardX, cardY, cardW, cardH, 8);
+    ctx.fill();
+    ctx.strokeStyle = '#ff9838';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = '#f1f5f9';
+    ctx.font = '14px sans-serif';
+    ctx.fillText('Welcome to Tidewater, an open-world coastal playground of fast cars and relentless heat.', width / 2, cardY + 30);
+    ctx.fillText('Team up with fixer Marisol Vega, steal wheels, survive police pursuits, and rule the coast.', width / 2, cardY + 55);
+    ctx.fillText('Desktop Chrome · Keyboard & Mouse · Audio synthesized via WebAudio', width / 2, cardY + 78);
+
+    // Controls Card
+    const ctrlW = Math.min(width - 60, 680);
+    const ctrlH = 110;
+    const ctrlX = (width - ctrlW) / 2;
+    const ctrlY = height * 0.49;
+
+    ctx.fillStyle = 'rgba(15, 18, 25, 0.85)';
+    ctx.beginPath();
+    ctx.roundRect(ctrlX, ctrlY, ctrlW, ctrlH, 8);
+    ctx.fill();
+    ctx.strokeStyle = '#457b9d';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffd166';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillText('CONTROLS', width / 2, ctrlY + 24);
+
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = '13px monospace';
+    ctx.fillText('[WASD] / [Arrows] Walk & Drive   ·   [Shift] Sprint   ·   [Space] Handbrake Drift', width / 2, ctrlY + 50);
+    ctx.fillText('[E] Steal / Enter / Exit Vehicle, Interact & Advance Story Dialogue', width / 2, ctrlY + 74);
+    ctx.fillText('[Left Click] / [F] Fire 9mm Pistol   ·   [M] Mute Audio', width / 2, ctrlY + 96);
+
+    // Interactive Buttons
+    const btnY = height * 0.72;
+    // New Game Button
+    ctx.fillStyle = '#e63946';
+    ctx.beginPath();
+    ctx.roundRect(width / 2 - 200, btnY, 400, 48, 8);
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 18px sans-serif';
+    ctx.fillText('▶ PRESS [ENTER] OR CLICK FOR NEW GAME', width / 2, btnY + 30);
+
+    // Continue Button (if save exists)
+    if (saveSummary) {
+      const cY = btnY + 60;
+      ctx.fillStyle = '#2ec4b6';
+      ctx.beginPath();
+      ctx.roundRect(width / 2 - 200, cY, 400, 42, 8);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = '#111';
+      ctx.font = 'bold 15px sans-serif';
+      ctx.fillText(`▶ PRESS [C] TO CONTINUE (Save: $${saveSummary.cash}, Mission ${saveSummary.missionIndex + 1})`, width / 2, cY + 26);
+    }
+
+    ctx.restore();
+  }
+
   renderScreenOverlays(ctx, wantedSystem, width, height) {
     if (wantedSystem.isWastedActive()) {
       ctx.fillStyle = 'rgba(180, 20, 30, 0.65)';
