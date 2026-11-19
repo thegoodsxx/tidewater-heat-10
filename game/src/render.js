@@ -60,9 +60,19 @@ export class Renderer {
     }
 
     // 5. Ground Shadow Pass (Golden-hour low-sun angle)
-    this.renderShadows(ctx, city, player, traffic, bounds);
+    this.renderShadows(ctx, city, player, traffic, options.pedestrians, bounds);
 
-    // 6. Vehicles (lower chassis & headlights)
+    // 6. Drops & Pickups (Cash, Ammo)
+    if (options.pedestrians && options.pedestrians.drops) {
+      this.renderDrops(ctx, options.pedestrians.drops);
+    }
+
+    // 7. Pedestrians
+    if (options.pedestrians && options.pedestrians.peds) {
+      this.renderPedestrians(ctx, options.pedestrians.peds);
+    }
+
+    // 8. Vehicles (lower chassis & headlights)
     if (traffic && traffic.vehicles) {
       this.renderHeadlights(ctx, traffic.vehicles);
       this.renderVehicles(ctx, traffic.vehicles);
@@ -581,5 +591,92 @@ export class Renderer {
     }
 
     ctx.restore();
+  }
+
+  renderDrops(ctx, drops) {
+    for (const d of drops) {
+      d.timer = (d.timer || 0) + 0.05;
+      const bob = Math.sin(d.timer * 4) * 3;
+      ctx.save();
+      ctx.translate(d.x, d.y + bob);
+
+      if (d.type === 'cash') {
+        ctx.fillStyle = PALETTE.cashGreen;
+        ctx.fillRect(-8, -5, 16, 10);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-8, -5, 16, 10);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 8px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('$', 0, 3);
+      } else {
+        ctx.fillStyle = '#d4a373';
+        ctx.fillRect(-7, -5, 14, 10);
+        ctx.strokeStyle = '#3d2616';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-7, -5, 14, 10);
+      }
+      ctx.restore();
+    }
+  }
+
+  renderPedestrians(ctx, peds) {
+    for (const p of peds) {
+      if (p.isDead) {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.angle);
+        ctx.fillStyle = '#8b0000';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 14, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = p.shirtColor;
+        ctx.fillRect(-6, -4, 12, 8);
+        ctx.fillStyle = p.skinColor;
+        ctx.beginPath();
+        ctx.arc(6, 0, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        continue;
+      }
+
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.angle);
+
+      const legOffset = Math.sin(p.walkCycle) * (p.state === 'flee' ? 6 : 4);
+      ctx.fillStyle = p.pantsColor;
+      ctx.fillRect(-5 + legOffset, -8, 5, 7);
+      ctx.fillRect(-5 - legOffset, 1, 5, 7);
+
+      ctx.fillStyle = p.shirtColor;
+      ctx.beginPath();
+      ctx.roundRect(-8, -6, 16, 12, 3);
+      ctx.fill();
+
+      ctx.fillStyle = p.skinColor;
+      ctx.fillRect(-2, -8, 8, 3);
+      ctx.fillRect(-2, 5, 8, 3);
+
+      ctx.fillStyle = p.skinColor;
+      ctx.beginPath();
+      ctx.arc(0, 0, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = p.hairColor;
+      ctx.beginPath();
+      ctx.arc(-2, 0, 4.5, Math.PI * 0.5, Math.PI * 1.5);
+      ctx.fill();
+
+      if (p.state === 'flee') {
+        ctx.fillStyle = '#e63946';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('!', 0, -12);
+      }
+
+      ctx.restore();
+    }
   }
 }
