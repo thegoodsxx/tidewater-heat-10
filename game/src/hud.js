@@ -45,7 +45,11 @@ export class Hud {
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Cash Display
+    // Mute Status Icon
+    ctx.fillStyle = PALETTE.hudMuted;
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('[M] Audio', rx + 15, ry + 16);
     ctx.fillStyle = PALETTE.cashGreen;
     ctx.font = 'bold 24px monospace';
     ctx.textAlign = 'right';

@@ -135,6 +135,20 @@ export class Renderer {
     if (options.hud) {
       options.hud.render(ctx, width, height, player, options.wantedSystem, options.missions, city, options.traffic, options.combat);
     }
+
+    // 14. Golden-Hour Coastal Vignette
+    this.renderGoldenHourVignette(ctx, width, height);
+  }
+
+  renderGoldenHourVignette(ctx, width, height) {
+    ctx.save();
+    const grad = ctx.createRadialGradient(width / 2, height / 2, Math.min(width, height) * 0.45, width / 2, height / 2, Math.max(width, height) * 0.85);
+    grad.addColorStop(0, 'rgba(255, 180, 80, 0.0)');
+    grad.addColorStop(0.7, 'rgba(255, 140, 50, 0.04)');
+    grad.addColorStop(1, 'rgba(40, 15, 25, 0.28)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
   }
 
   renderStartScreen(ctx, width, height, saveSummary) {
