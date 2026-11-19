@@ -34,6 +34,8 @@ export class Renderer {
     const ctx = this.ctx;
     const { width, height } = this.canvas;
     const cam = camera.getOffset();
+    const traffic = options.traffic;
+    const particles = options.particles;
 
     ctx.save();
     // Camera transformation
@@ -52,18 +54,34 @@ export class Renderer {
     // 3. Roads, Sidewalks, Crosswalks & Pier
     this.renderRoads(ctx, city, bounds);
 
-    // 4. Ground Shadow Pass (Golden-hour low-sun angle)
-    this.renderShadows(ctx, city, player, bounds);
+    // 4. Tire Skid Marks
+    if (particles) {
+      particles.renderSkids(ctx);
+    }
 
-    // 5. Props (Park pond, trees, streetlamps)
+    // 5. Ground Shadow Pass (Golden-hour low-sun angle)
+    this.renderShadows(ctx, city, player, traffic, bounds);
+
+    // 6. Vehicles (lower chassis & headlights)
+    if (traffic && traffic.vehicles) {
+      this.renderHeadlights(ctx, traffic.vehicles);
+      this.renderVehicles(ctx, traffic.vehicles);
+    }
+
+    // 7. Props (Park pond, trees, streetlamps)
     this.renderProps(ctx, city, bounds);
 
-    // 6. Buildings & Rooftops
+    // 8. Buildings & Rooftops
     this.renderBuildings(ctx, city, bounds);
 
-    // 7. Player (if on foot)
+    // 9. Player (if on foot)
     if (!player.inVehicle && !player.isDead) {
       this.renderPlayer(ctx, player);
+    }
+
+    // 10. Particles (sparks, smoke, blood, fire)
+    if (particles) {
+      particles.renderParticles(ctx);
     }
 
     ctx.restore();
@@ -251,7 +269,7 @@ export class Renderer {
     }
   }
 
-  renderShadows(ctx, city, player, bounds) {
+  renderShadows(ctx, city, player, traffic, bounds) {
     const shadowDist = PALETTE.shadowDist;
     const shadowAngle = PALETTE.shadowAngle;
     const sx = Math.cos(shadowAngle) * shadowDist;
@@ -272,6 +290,19 @@ export class Renderer {
       ctx.fill();
     }
 
+    // Vehicle shadows
+    if (traffic && traffic.vehicles) {
+      for (const v of traffic.vehicles) {
+        ctx.save();
+        ctx.translate(v.x + sx * 0.5, v.y + sy * 0.5);
+        ctx.rotate(v.angle);
+        ctx.beginPath();
+        ctx.roundRect(-v.length / 2, -v.width / 2, v.length, v.width, 6);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
     // Palm tree shadows
     for (const p of city.props) {
       if (p.type === 'palm_tree') {
@@ -286,6 +317,115 @@ export class Renderer {
       ctx.beginPath();
       ctx.ellipse(player.x + sx * 0.4, player.y + sy * 0.4, player.radius + 3, player.radius - 2, shadowAngle, 0, Math.PI * 2);
       ctx.fill();
+    }
+  }
+
+  renderHeadlights(ctx, vehicles) {
+    for (const v of vehicles) {
+      // Warm yellow/amber dusk headlight cones
+      ctx.save();
+      ctx.translate(v.x, v.y);
+      ctx.rotate(v.angle);
+
+      const fwd = v.length / 2;
+      const beamLen = 140;
+      const beamSpread = 32;
+
+      // Left light cone
+      const gradLeft = ctx.createRadialGradient(fwd, -v.width * 0.35, 4, fwd + beamLen * 0.7, -v.width * 0.35, beamLen);
+      gradLeft.addColorStop(0, 'rgba(255, 235, 170, 0.45)');
+      gradLeft.addColorStop(1, 'rgba(255, 235, 170, 0.0)');
+
+      ctx.fillStyle = gradLeft;
+      ctx.beginPath();
+      ctx.moveTo(fwd, -v.width * 0.35);
+      ctx.lineTo(fwd + beamLen, -v.width * 0.35 - beamSpread);
+      ctx.lineTo(fwd + beamLen, -v.width * 0.35 + beamSpread * 0.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Right light cone
+      const gradRight = ctx.createRadialGradient(fwd, v.width * 0.35, 4, fwd + beamLen * 0.7, v.width * 0.35, beamLen);
+      gradRight.addColorStop(0, 'rgba(255, 235, 170, 0.45)');
+      gradRight.addColorStop(1, 'rgba(255, 235, 170, 0.0)');
+
+      ctx.fillStyle = gradRight;
+      ctx.beginPath();
+      ctx.moveTo(fwd, v.width * 0.35);
+      ctx.lineTo(fwd + beamLen, v.width * 0.35 - beamSpread * 0.5);
+      ctx.lineTo(fwd + beamLen, v.width * 0.35 + beamSpread);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore();
+    }
+  }
+
+  renderVehicles(ctx, vehicles) {
+    for (const v of vehicles) {
+      ctx.save();
+      ctx.translate(v.x, v.y);
+      ctx.rotate(v.angle);
+
+      const hl = v.length / 2;
+      const hw = v.width / 2;
+
+      // Mission 1 Marked sports car indicator aura
+      if (v.isMissionCar) {
+        ctx.strokeStyle = '#ffd166';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, v.radius + 12 + Math.sin(this.time * 6) * 4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Main Car Chassis
+      ctx.fillStyle = v.bodyColor;
+      ctx.beginPath();
+      ctx.roundRect(-hl, -hw, v.length, v.width, 6);
+      ctx.fill();
+
+      // Chassis outline
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Windshield & Rear glass
+      ctx.fillStyle = '#1c2833';
+      ctx.fillRect(-hl * 0.45, -hw * 0.75, v.length * 0.65, v.width * 0.75);
+
+      // Car Roof
+      ctx.fillStyle = v.roofColor;
+      ctx.beginPath();
+      ctx.roundRect(-hl * 0.3, -hw * 0.7, v.length * 0.45, v.width * 0.7, 4);
+      ctx.fill();
+
+      // Headlights
+      ctx.fillStyle = '#fff4cc';
+      ctx.fillRect(hl - 3, -hw + 3, 3, 6);
+      ctx.fillRect(hl - 3, hw - 9, 3, 6);
+
+      // Taillights
+      ctx.fillStyle = '#d90429';
+      ctx.fillRect(-hl, -hw + 3, 3, 6);
+      ctx.fillRect(-hl, hw - 9, 3, 6);
+
+      // Police Cruiser Lightbar
+      if (v.isPolice) {
+        const isRed = Math.floor(v.sirenTimer) % 2 === 0;
+        ctx.fillStyle = isRed ? '#e63946' : '#2b7fff';
+        ctx.fillRect(-3, -hw * 0.5, 6, v.width * 0.5);
+
+        // Siren glow if active
+        if (v.sirenActive) {
+          ctx.fillStyle = isRed ? 'rgba(230, 57, 70, 0.4)' : 'rgba(43, 127, 255, 0.4)';
+          ctx.beginPath();
+          ctx.arc(0, 0, 36, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      ctx.restore();
     }
   }
 
