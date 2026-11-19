@@ -130,6 +130,11 @@ export class Renderer {
     if (options.missions) {
       this.renderMissionPanels(ctx, options.missions, width, height);
     }
+
+    // 13. HUD & Minimap
+    if (options.hud) {
+      options.hud.render(ctx, width, height, player, options.wantedSystem, options.missions, city, options.traffic, options.combat);
+    }
   }
 
   renderScreenOverlays(ctx, wantedSystem, width, height) {
